@@ -1,88 +1,99 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Play, Pause, Music2 } from 'lucide-react';
 
-// Reliable, CORS-friendly default track. You can paste a custom URL in the input.
 const DEFAULT_TRACK = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
 
 export default function TopBar() {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [trackUrl, setTrackUrl] = useState(() => {
-    try {
-      return localStorage.getItem('musicTrackUrl') || DEFAULT_TRACK;
-    } catch {
-      return DEFAULT_TRACK;
-    }
-  });
+  const [trackUrl, setTrackUrl] = useState('');
+  const [inputValue, setInputValue] = useState('');
+  const [error, setError] = useState('');
 
+  // Load saved track URL
   useEffect(() => {
-    try {
-      localStorage.setItem('musicTrackUrl', trackUrl);
-    } catch {}
-  }, [trackUrl]);
+    const saved = localStorage.getItem('topbar_track_url') || DEFAULT_TRACK;
+    setTrackUrl(saved);
+    setInputValue(saved);
+  }, []);
 
-  const ensureReady = async () => {
-    if (!audioRef.current) return;
-    try {
-      // Reset and load to ensure latest URL is used
-      audioRef.current.pause();
-      await audioRef.current.load?.();
-      await audioRef.current.play();
-      setIsPlaying(true);
-      setErrorMsg('');
-    } catch (err) {
-      setIsPlaying(false);
-      setErrorMsg('Tap the play button again to start the music (autoplay was blocked).');
+  // Keep audio src in sync
+  useEffect(() => {
+    if (audioRef.current && trackUrl) {
+      audioRef.current.src = trackUrl;
     }
-  };
+  }, [trackUrl]);
 
   const togglePlay = async () => {
     if (!audioRef.current) return;
+    setError('');
+    try {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        await audioRef.current.play();
+        setIsPlaying(true);
+      }
+    } catch (e) {
+      // Autoplay blocked or CORS issues. Prompt user to tap again or change URL.
+      setError('Playback blocked or unsupported source. Tap play again or try a different direct MP3 URL.');
+    }
+  };
+
+  const handleUrlApply = () => {
+    const url = inputValue.trim();
+    if (!url) return;
+    setTrackUrl(url);
+    localStorage.setItem('topbar_track_url', url);
+    // Attempt to play new source if already in playing state
     if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      await ensureReady();
+      setTimeout(() => togglePlay(), 50);
     }
   };
 
   return (
-    <header className="sticky top-0 z-30 backdrop-blur bg-black/30 border-b border-white/10">
-      <div className="mx-auto max-w-6xl px-4 h-14 flex items-center gap-3">
+    <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-white/60 bg-white/70 dark:bg-neutral-900/70 border-b border-black/5 dark:border-white/10">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600/80">🎧</span>
-          <span className="text-sm text-indigo-200/90 hidden sm:block">Focus Music</span>
+          <button
+            onClick={togglePlay}
+            aria-label={isPlaying ? 'Pause background audio' : 'Play background audio'}
+            className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-sky-500 text-white shadow hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          >
+            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+          </button>
+          <Music2 className="text-indigo-500" size={20} aria-hidden="true" />
+          <span className="font-semibold">Comback Mode 2.0</span>
         </div>
 
-        <button
-          onClick={togglePlay}
-          className={`ml-2 px-3 py-1.5 rounded-md text-sm border transition-colors ${
-            isPlaying ? 'bg-indigo-600 border-indigo-500' : 'bg-white/10 border-white/15 hover:bg-white/15'
-          }`}
-        >
-          {isPlaying ? 'Pause' : 'Play'}
-        </button>
-
-        <div className="ml-3 flex-1 min-w-0">
+        <div className="ml-auto flex items-center gap-2 w-full max-w-xl">
+          <label htmlFor="trackUrl" className="sr-only">Audio track URL</label>
           <input
-            value={trackUrl}
-            onChange={(e) => setTrackUrl(e.target.value)}
-            placeholder="Paste a track URL (e.g., Unstoppable by Sia stream)"
-            className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/60"
+            id="trackUrl"
+            type="url"
+            inputMode="url"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Paste a direct MP3 URL"
+            className="flex-1 rounded-md border border-black/10 dark:border-white/10 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
+          <button
+            onClick={handleUrlApply}
+            className="px-3 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          >
+            Apply
+          </button>
         </div>
-
-        <audio
-          ref={audioRef}
-          src={trackUrl}
-          preload="none"
-          controls={false}
-          crossOrigin="anonymous"
-        />
       </div>
-      {errorMsg && (
-        <div className="mx-auto max-w-6xl px-4 pb-2 text-xs text-amber-300">{errorMsg}</div>
+
+      {error && (
+        <div role="alert" className="max-w-6xl mx-auto px-4 pb-3 text-sm text-amber-700 dark:text-amber-300">
+          {error}
+        </div>
       )}
+
+      <audio ref={audioRef} preload="none" />
     </header>
   );
 }
