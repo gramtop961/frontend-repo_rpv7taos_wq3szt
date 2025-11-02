@@ -5,7 +5,7 @@ import SwipeDeck from './components/SwipeDeck';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-50 via-white to-white text-slate-900">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-50 via-white to-white text-slate-900 font-['Inter']">
       <TopBar />
       <HeroSpline />
       <main className="max-w-[100vw] overflow-hidden">

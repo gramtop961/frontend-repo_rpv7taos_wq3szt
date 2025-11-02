@@ -21,7 +21,6 @@ function todayKey() {
 }
 
 function calcStreak(dates) {
-  // dates: array of YYYY-MM-DD strings
   const set = new Set(dates);
   let streak = 0;
   let d = new Date();
@@ -36,7 +35,7 @@ function calcStreak(dates) {
 function Section({ children, title, subtitle }) {
   return (
     <section className="snap-center shrink-0 w-full max-w-6xl px-4 py-6 sm:py-8">
-      <div className="rounded-2xl border border-emerald-100 bg-white/85 backdrop-blur p-5 sm:p-6 shadow-sm">
+      <div className="rounded-2xl border border-indigo-100 bg-white/85 backdrop-blur p-5 sm:p-6 shadow-sm">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-slate-900">{title}</h2>
@@ -58,11 +57,11 @@ export default function SwipeDeck() {
 
   // MOTIVATION & MOOD
   const moodOptions = [
-    { key: 'calm', label: 'Calm 🌿' },
-    { key: 'hopeful', label: 'Hopeful 🌤️' },
-    { key: 'stressed', label: 'Stressed 😣' },
-    { key: 'angry', label: 'Angry 😠' },
-    { key: 'lost', label: 'Lost 😔' },
+    { key: 'calm', label: 'Calm 🌿', score: 4 },
+    { key: 'hopeful', label: 'Hopeful 🌤️', score: 5 },
+    { key: 'stressed', label: 'Stressed 😣', score: 2 },
+    { key: 'angry', label: 'Angry 😠', score: 1 },
+    { key: 'lost', label: 'Lost 😔', score: 2 },
   ];
   const moodData = useMemo(() => ({
     calm: {
@@ -88,10 +87,18 @@ export default function SwipeDeck() {
   }), []);
   const [mood, setMood] = useState('hopeful');
   const [quoteIndex, setQuoteIndex] = useState(0);
+  const [moodHist, setMoodHist] = useLocalStorage('hist_mood', {}); // {date: numericScore}
   useEffect(() => {
-    const timer = setInterval(() => setQuoteIndex((i) => (i + 1) % moodData[mood].quotes.length), 10000);
+    const timer = setInterval(() => setQuoteIndex((i) => (i + 1) % moodData[mood].quotes.length), 6000);
     return () => clearInterval(timer);
   }, [mood, moodData]);
+  useEffect(() => {
+    // record current mood as trend (1-5)
+    const k = todayKey();
+    const opt = moodOptions.find(m => m.key === mood);
+    if (opt) setMoodHist({ ...moodHist, [k]: opt.score });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mood]);
 
   // HEALTH & ROUTINE
   const [water, setWater] = useLocalStorage('water', 0); // glasses out of 8
@@ -110,7 +117,6 @@ export default function SwipeDeck() {
                  Object.values(routine).filter(Boolean).length;
     return Math.round((done / total) * 100);
   }, [meals, routine]);
-  // Track daily water history
   const [waterHist, setWaterHist] = useLocalStorage('hist_water', {}); // {date: value}
   useEffect(() => {
     const k = todayKey();
@@ -129,7 +135,6 @@ export default function SwipeDeck() {
   const [p1Hist, setP1Hist] = useLocalStorage('hist_phase1', []); // array of dates
   const p1Progress = useMemo(() => Math.round((Object.values(p1).filter(Boolean).length / 4) * 100), [p1]);
   const markPhase = (num) => {
-    const key = `hist_phase${num}`;
     const setter = num===1? setP1Hist : num===2? setP2Hist : setP3Hist;
     const hist = num===1? p1Hist : num===2? p2Hist : p3Hist;
     const k = todayKey();
@@ -206,21 +211,25 @@ export default function SwipeDeck() {
     let timer = setTimeout(tick, 500);
     return () => clearTimeout(timer);
   }, []);
-  const soundUrl = 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_5f3d5e2a3c.mp3?filename=brown-noise-22360.mp3';
+  const soundUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3';
 
   // Anger Management
   const [angerSecs, setAngerSecs] = useState(60);
+  const angerTimerRef = useRef(null);
   useEffect(() => {
     if (angerSecs <= 0) return;
-    const t = setTimeout(() => setAngerSecs(angerSecs - 1), 1000);
-    return () => clearTimeout(t);
+    angerTimerRef.current = setTimeout(() => setAngerSecs((s) => s - 1), 1000);
+    return () => clearTimeout(angerTimerRef.current);
   }, [angerSecs]);
+  const stopAngerTimer = () => {
+    clearTimeout(angerTimerRef.current);
+    setAngerSecs(0);
+  };
   const [reframe, setReframe] = useState('');
 
   // Analytics & Rewards
   const [points, setPoints] = useLocalStorage('points', 0);
   useEffect(() => {
-    // award when completing phase progress to 100
     if (p1Progress === 100) setPoints((p)=>p+10);
     if (p2Progress === 100) setPoints((p)=>p+10);
     if (p3Progress === 100) setPoints((p)=>p+10);
@@ -240,11 +249,21 @@ export default function SwipeDeck() {
     }
   };
 
+  // Derived analytics
+  const reflectionsByDay = useMemo(() => {
+    const counts = {};
+    notes.forEach(n => {
+      const k = new Date(n.at).toISOString().slice(0,10);
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    return counts;
+  }, [notes]);
+
   return (
     <div className="w-full relative">
       {/* Side arrows */}
-      <button onClick={() => goBy(-1)} className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700">◀</button>
-      <button onClick={() => goBy(1)} className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700">▶</button>
+      <button onClick={() => goBy(-1)} className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white shadow hover:bg-indigo-700">◀</button>
+      <button onClick={() => goBy(1)} className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-white shadow hover:bg-indigo-700">▶</button>
 
       <div
         ref={containerRef}
@@ -255,13 +274,13 @@ export default function SwipeDeck() {
         <Section title="Motivation & Mood" subtitle="Pick mood to see tailored quote and tiny action">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <div className="text-slate-600 text-sm mb-2">Tap to change quote</div>
+              <div className="text-slate-600 text-sm mb-2">Auto-swipes every few seconds</div>
               <button
                 onClick={() => setQuoteIndex((i) => (i + 1) % moodData[mood].quotes.length)}
-                className="w-full text-left p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 hover:shadow"
+                className="w-full text-left p-4 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-indigo-100 hover:shadow"
               >
                 <p className="text-lg font-semibold text-slate-900">{moodData[mood].quotes[quoteIndex]}</p>
-                <p className="mt-2 text-sm text-emerald-700">Action: {moodData[mood].actions[quoteIndex % moodData[mood].actions.length]}</p>
+                <p className="mt-2 text-sm text-indigo-700">Action: {moodData[mood].actions[quoteIndex % moodData[mood].actions.length]}</p>
               </button>
             </div>
             <div>
@@ -271,7 +290,7 @@ export default function SwipeDeck() {
                   <button
                     key={m.key}
                     onClick={() => { setMood(m.key); setQuoteIndex(0); }}
-                    className={`rounded-lg px-3 py-2 border text-sm ${mood === m.key ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-slate-200 hover:border-emerald-300'}`}
+                    className={`rounded-lg px-3 py-2 border text-sm ${mood === m.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
                   >
                     {m.label}
                   </button>
@@ -291,10 +310,10 @@ export default function SwipeDeck() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setWater(Math.max(0, water - 1))} className="px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200">-</button>
-                <button onClick={() => setWater(Math.min(8, water + 1))} className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">+</button>
+                <button onClick={() => setWater(Math.min(8, water + 1))} className="px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">+</button>
               </div>
               <div className="h-2 bg-slate-100 rounded-full mt-3 overflow-hidden">
-                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(water/8)*100}%` }} />
+                <div className="h-full bg-indigo-500 transition-all" style={{ width: `${(water/8)*100}%` }} />
               </div>
             </div>
 
@@ -320,7 +339,7 @@ export default function SwipeDeck() {
                   ['noDrink','No Drink Today'],
                   ['message','Message an important person'],
                 ].map(([k,label]) => (
-                  <label key={k} className="flex items-center gap-2 p-2 rounded border border-slate-200 hover:border-emerald-300">
+                  <label key={k} className="flex items-center gap-2 p-2 rounded border border-slate-200 hover:border-indigo-300">
                     <input type="checkbox" checked={!!routine[k]} onChange={(e)=> setRoutine({ ...routine, [k]: e.target.checked })} />
                     {label}
                   </label>
@@ -334,7 +353,7 @@ export default function SwipeDeck() {
                   <h3 className="text-lg font-semibold mb-2">Health Progress</h3>
                   <p className="text-sm text-slate-600 mb-4">Great going! Keep the streak alive.</p>
                   <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500" style={{ width: `${healthCompletion}%` }} />
+                    <div className="h-full bg-indigo-500" style={{ width: `${healthCompletion}%` }} />
                   </div>
                   <div className="mt-3 text-sm">Estimated streak: <span className="font-medium">{Math.round(healthCompletion/20)} days</span></div>
                   <div className="mt-4 text-right">
@@ -357,7 +376,7 @@ export default function SwipeDeck() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setPhase1Active(!phase1Active)}
-                className={`px-4 py-2 rounded-full text-sm font-medium ${phase1Active ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'}`}
+                className={`px-4 py-2 rounded-full text-sm font-medium ${phase1Active ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'}`}
               >
                 {phase1Active ? 'Phase 1 Active' : 'Start Phase 1'}
               </button>
@@ -371,7 +390,7 @@ export default function SwipeDeck() {
                 ['relaxMusic','10-min Relax Music'],
                 ['journal','Journal Entry Done'],
               ].map(([k,label]) => (
-                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p1[k] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p1[k] ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'}`}>
                   <input type="checkbox" disabled={!phase1Active} checked={!!p1[k]} onChange={(e)=> setP1({ ...p1, [k]: e.target.checked })} />
                   {label}
                 </label>
@@ -380,13 +399,13 @@ export default function SwipeDeck() {
 
             <div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${p1Progress}%` }} />
+                <div className="h-full bg-indigo-500 transition-all" style={{ width: `${p1Progress}%` }} />
               </div>
               <div className="mt-1 text-sm text-slate-600">Progress: {p1Progress}%</div>
             </div>
 
             <div className="flex items-center gap-3">
-              <button onClick={() => { markPhase(1); }} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
+              <button onClick={() => { markPhase(1); }} className="rounded bg-indigo-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
             </div>
 
             <div className="text-xs text-slate-500">Streak: {calcStreak(p1Hist)} days</div>
@@ -397,7 +416,7 @@ export default function SwipeDeck() {
         <Section title="Phase 2: Build Power (21 Days)" subtitle="Strength, cardio, focus blocks, connection">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <button onClick={() => setPhase2Active(!phase2Active)} className={`px-4 py-2 rounded-full text-sm font-medium ${phase2Active ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'}`}>
+              <button onClick={() => setPhase2Active(!phase2Active)} className={`px-4 py-2 rounded-full text-sm font-medium ${phase2Active ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'}`}>
                 {phase2Active ? 'Phase 2 Active' : 'Start Phase 2'}
               </button>
               <div className="text-sm text-slate-600">Build physical and mental strength.</div>
@@ -409,7 +428,7 @@ export default function SwipeDeck() {
                 ['focusBlock','45-min Focus Block'],
                 ['connect','Call/Meet someone important'],
               ].map(([k,label]) => (
-                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p2[k] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p2[k] ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'}`}>
                   <input type="checkbox" disabled={!phase2Active} checked={!!p2[k]} onChange={(e)=> setP2({ ...p2, [k]: e.target.checked })} />
                   {label}
                 </label>
@@ -417,11 +436,11 @@ export default function SwipeDeck() {
             </div>
             <div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${p2Progress}%` }} />
+                <div className="h-full bg-indigo-500 transition-all" style={{ width: `${p2Progress}%` }} />
               </div>
               <div className="mt-1 text-sm text-slate-600">Progress: {p2Progress}%</div>
             </div>
-            <button onClick={() => { markPhase(2); }} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
+            <button onClick={() => { markPhase(2); }} className="rounded bg-indigo-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
             <div className="text-xs text-slate-500">Streak: {calcStreak(p2Hist)} days</div>
           </div>
         </Section>
@@ -430,7 +449,7 @@ export default function SwipeDeck() {
         <Section title="Phase 3: Thrive (Forever)" subtitle="Deep habits, learning, doing hard things, kindness">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <button onClick={() => setPhase3Active(!phase3Active)} className={`px-4 py-2 rounded-full text-sm font-medium ${phase3Active ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'}`}>
+              <button onClick={() => setPhase3Active(!phase3Active)} className={`px-4 py-2 rounded-full text-sm font-medium ${phase3Active ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'}`}>
                 {phase3Active ? 'Phase 3 Active' : 'Start Phase 3'}
               </button>
               <div className="text-sm text-slate-600">Live your best systems daily.</div>
@@ -442,7 +461,7 @@ export default function SwipeDeck() {
                 ['hardThing','Do one hard thing'],
                 ['helpSomeone','Help someone'],
               ].map(([k,label]) => (
-                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p3[k] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p3[k] ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'}`}>
                   <input type="checkbox" disabled={!phase3Active} checked={!!p3[k]} onChange={(e)=> setP3({ ...p3, [k]: e.target.checked })} />
                   {label}
                 </label>
@@ -450,11 +469,11 @@ export default function SwipeDeck() {
             </div>
             <div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${p3Progress}%` }} />
+                <div className="h-full bg-indigo-500 transition-all" style={{ width: `${p3Progress}%` }} />
               </div>
               <div className="mt-1 text-sm text-slate-600">Progress: {p3Progress}%</div>
             </div>
-            <button onClick={() => { markPhase(3); }} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
+            <button onClick={() => { markPhase(3); }} className="rounded bg-indigo-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
             <div className="text-xs text-slate-500">Streak: {calcStreak(p3Hist)} days</div>
           </div>
         </Section>
@@ -464,7 +483,7 @@ export default function SwipeDeck() {
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-2">
               {habits.map(h => (
-                <label key={h.id} className={`flex items-center gap-2 p-2 rounded border ${h.done ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                <label key={h.id} className={`flex items-center gap-2 p-2 rounded border ${h.done ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'}`}>
                   <input type="checkbox" checked={h.done} onChange={() => toggleHabit(h.id)} />
                   <span className="text-sm">{h.name}</span>
                 </label>
@@ -472,7 +491,7 @@ export default function SwipeDeck() {
             </div>
             <div className="flex items-center gap-2">
               <input value={newHabit} onChange={(e)=> setNewHabit(e.target.value)} placeholder="Add a new habit" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-              <button onClick={addHabit} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Add</button>
+              <button onClick={addHabit} className="rounded bg-indigo-600 text-white px-4 py-2 text-sm">Add</button>
             </div>
             <div className="text-xs text-slate-500">Today done: {habits.filter(h=>h.done).length} • Streak approx: {Math.round((habitHist[todayKey()]||0)/Math.max(1,habits.length)*3)} days</div>
           </div>
@@ -482,11 +501,11 @@ export default function SwipeDeck() {
         <Section title="Calm Zone" subtitle="4-7-8 breathing with brown noise option">
           <div className="grid sm:grid-cols-2 gap-4 items-center">
             <div className="flex flex-col items-center">
-              <div className="h-40 w-40 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center text-emerald-700 text-lg font-semibold animate-pulse" aria-live="polite">{breathPhase}</div>
+              <div className="h-40 w-40 rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center text-indigo-700 text-lg font-semibold animate-pulse" aria-live="polite">{breathPhase}</div>
               <div className="mt-2 text-xs text-slate-500">Cycles: {Math.floor(breathCount/3)}</div>
             </div>
             <div className="space-y-3">
-              <audio controls src={soundUrl} className="w-full" />
+              <audio controls preload="auto" src={soundUrl} className="w-full" />
               <p className="text-sm text-slate-600">Tip: Close eyes, sit upright, tongue behind teeth. Inhale 4 — Hold 7 — Exhale 8.</p>
             </div>
           </div>
@@ -497,6 +516,7 @@ export default function SwipeDeck() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <button onClick={() => setAngerSecs(60)} className="rounded bg-slate-900 text-white px-4 py-2 text-sm">Start 60s Timer</button>
+              <button onClick={stopAngerTimer} className="rounded bg-rose-600 text-white px-4 py-2 text-sm">Stop</button>
               <div className="text-sm text-slate-700">Time left: {angerSecs}s</div>
             </div>
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
@@ -527,10 +547,10 @@ export default function SwipeDeck() {
               onChange={(e)=> setEntry(e.target.value)}
               rows={4}
               placeholder="What did I learn today? Aaj ka sabse important moment kya tha?"
-              className="w-full rounded-xl border border-slate-200 p-3 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              className="w-full rounded-xl border border-slate-200 p-3 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
             <div className="flex items-center justify-between">
-              <button onClick={saveEntry} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Save Reflection</button>
+              <button onClick={saveEntry} className="rounded bg-indigo-600 text-white px-4 py-2 text-sm">Save Reflection</button>
               <div className="text-sm text-slate-600">Points: {points}</div>
             </div>
 
@@ -552,15 +572,23 @@ export default function SwipeDeck() {
         </Section>
 
         {/* 10. Analytics */}
-        <Section title="Analytics" subtitle="Simple charts for water, habits, and phases">
+        <Section title="Analytics" subtitle="Simple charts for water, habits, mood trend, reflections">
           <div className="grid sm:grid-cols-2 gap-6">
             <div>
               <h5 className="text-sm font-semibold mb-2">Water (last 7 days)</h5>
-              <BarChart data={last7(waterHist)} max={8} color="bg-emerald-500" />
+              <BarChart data={last7(waterHist)} max={8} color="bg-indigo-500" />
             </div>
             <div>
               <h5 className="text-sm font-semibold mb-2">Habits done (last 7 days)</h5>
-              <BarChart data={last7(habitHist)} max={habits.length} color="bg-teal-500" />
+              <BarChart data={last7(habitHist)} max={habits.length || 1} color="bg-violet-500" />
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold mb-2">Mood trend (1–5 last 7 days)</h5>
+              <BarChart data={last7(moodHist)} max={5} color="bg-blue-500" />
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold mb-2">Reflections (last 7 days)</h5>
+              <BarChart data={last7(reflectionsByDay)} max={3} color="bg-slate-700" />
             </div>
             <div>
               <h5 className="text-sm font-semibold mb-2">Phase check-ins (P1/P2/P3)</h5>
@@ -574,31 +602,48 @@ export default function SwipeDeck() {
               <h5 className="text-sm font-semibold mb-2">Badges Earned</h5>
               <div className="flex flex-wrap gap-2">
                 {badges.length === 0 ? <span className="text-sm text-slate-500">No badges yet.</span> : badges.map(b => (
-                  <span key={b.id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">🏅 {b.label}</span>
+                  <span key={b.id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">🏅 {b.label}</span>
                 ))}
               </div>
             </div>
           </div>
         </Section>
 
-        {/* 11. Rewards */}
+        {/* 11. History Timeline */}
+        <Section title="History Timeline" subtitle="Your last 7 days across logs">
+          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2 text-xs">
+            {last7Summary({ waterHist, habitHist, p1Hist, p2Hist, p3Hist, reflectionsByDay }).map((d) => (
+              <div key={d.label} className="p-2 rounded-lg border border-slate-200 bg-white">
+                <div className="font-semibold text-slate-700">{d.label}</div>
+                <div className="mt-1 space-y-1 text-slate-600">
+                  <div>💧 {d.water}/8</div>
+                  <div>✅ {d.habits}</div>
+                  <div>🧠 {d.reflect}</div>
+                  <div>🏁 P1:{d.p1} P2:{d.p2} P3:{d.p3}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* 12. Rewards */}
         <Section title="Rewards" subtitle="Earn points for consistency and unlock badges">
           <div className="space-y-3">
-            <div className="text-3xl font-bold text-emerald-600">{points}</div>
+            <div className="text-3xl font-bold text-indigo-600">{points}</div>
             <div className="text-sm text-slate-600">You gain +10 for full phase day, +5 per reflection.</div>
             <div className="flex flex-wrap gap-2">
               {[10,30,60,100].map(n => (
-                <div key={n} className={`px-3 py-2 rounded-lg border ${points>=n? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>Milestone {n}</div>
+                <div key={n} className={`px-3 py-2 rounded-lg border ${points>=n? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500'}`}>Milestone {n}</div>
               ))}
             </div>
           </div>
         </Section>
 
-        {/* 12. Notifications */}
+        {/* 13. Notifications */}
         <Section title="Notifications" subtitle="Enable gentle reminders (browser-based)">
           <div className="space-y-3">
             <p className="text-sm text-slate-600">Turn on notifications to get a soft nudge for breathing or water.</p>
-            <button onClick={requestNotify} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Enable & Send Test</button>
+            <button onClick={requestNotify} className="rounded bg-indigo-600 text-white px-4 py-2 text-sm">Enable & Send Test</button>
             <div className="text-xs text-slate-500">Note: Works if your browser allows notifications.</div>
           </div>
         </Section>
@@ -610,7 +655,6 @@ export default function SwipeDeck() {
 }
 
 function last7(obj) {
-  // obj: {date: value}
   const out = [];
   for (let i=6;i>=0;i--) {
     const d = new Date(); d.setDate(d.getDate()-i);
@@ -618,6 +662,24 @@ function last7(obj) {
     out.push({ label: k.slice(5), value: obj[k] || 0 });
   }
   return out;
+}
+
+function last7Summary({ waterHist, habitHist, p1Hist, p2Hist, p3Hist, reflectionsByDay }) {
+  const days = [];
+  for (let i=6;i>=0;i--) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const k = d.toISOString().slice(0,10);
+    days.push({
+      label: k.slice(5),
+      water: waterHist[k] || 0,
+      habits: habitHist[k] || 0,
+      reflect: reflectionsByDay[k] || 0,
+      p1: p1Hist.includes(k) ? '✓' : '-',
+      p2: p2Hist.includes(k) ? '✓' : '-',
+      p3: p3Hist.includes(k) ? '✓' : '-',
+    });
+  }
+  return days;
 }
 
 function BarChart({ data, max, color }) {
@@ -637,7 +699,7 @@ function Badge({ label, value }) {
   return (
     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-sm">
       <span className="text-xs font-medium text-slate-700">{label}</span>
-      <span className="text-sm font-semibold text-emerald-700">{value}</span>
+      <span className="text-sm font-semibold text-indigo-700">{value}</span>
     </div>
   );
 }
