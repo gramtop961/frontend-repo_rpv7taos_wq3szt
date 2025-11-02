@@ -15,12 +15,33 @@ function useLocalStorage(key, initial) {
   return [value, setValue];
 }
 
-function Section({ children, title }) {
+function todayKey() {
+  const d = new Date();
+  return d.toISOString().slice(0,10); // YYYY-MM-DD
+}
+
+function calcStreak(dates) {
+  // dates: array of YYYY-MM-DD strings
+  const set = new Set(dates);
+  let streak = 0;
+  let d = new Date();
+  while (true) {
+    const k = d.toISOString().slice(0,10);
+    if (set.has(k)) { streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
+}
+
+function Section({ children, title, subtitle }) {
   return (
     <section className="snap-center shrink-0 w-full max-w-6xl px-4 py-6 sm:py-8">
-      <div className="rounded-2xl border border-gray-200 bg-white/80 backdrop-blur p-5 sm:p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">{title}</h2>
+      <div className="rounded-2xl border border-emerald-100 bg-white/85 backdrop-blur p-5 sm:p-6 shadow-sm">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900">{title}</h2>
+            {subtitle && <p className="text-xs text-slate-500 mt-1">{subtitle}</p>}
+          </div>
         </div>
         {children}
       </div>
@@ -30,62 +51,45 @@ function Section({ children, title }) {
 
 export default function SwipeDeck() {
   const containerRef = useRef(null);
-  const goNext = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    el.scrollBy({ left: el.clientWidth, behavior: 'smooth' });
+  const goBy = (dir) => {
+    const el = containerRef.current; if (!el) return;
+    el.scrollBy({ left: dir * el.clientWidth, behavior: 'smooth' });
   };
 
   // MOTIVATION & MOOD
   const moodOptions = [
-    { key: 'happy', label: 'Happy 😄' },
-    { key: 'sad', label: 'Sad 😢' },
+    { key: 'calm', label: 'Calm 🌿' },
+    { key: 'hopeful', label: 'Hopeful 🌤️' },
+    { key: 'stressed', label: 'Stressed 😣' },
     { key: 'angry', label: 'Angry 😠' },
     { key: 'lost', label: 'Lost 😔' },
-    { key: 'hopeful', label: 'Hopeful 🌤️' },
   ];
   const moodData = useMemo(() => ({
-    happy: {
-      quotes: [
-        'Khushiyan phailao — aaj tumhari energy sabko utha degi!',
-        'Smile rakho, duniya thodi aur roshan ho jaayegi.'
-      ],
-      actions: ['Ek dost ko positive message bhejo', '5 gratitude lines likho']
-    },
-    sad: {
-      quotes: [
-        'Aaj tough hai, par tu tough se zyada strong hai, Gaurav.',
-        'Rone do thoda, phir nayi himmat se khade ho jao.'
-      ],
-      actions: ['5 deep breaths lo', 'Apne aap ko ek garam chai treat do']
-    },
-    angry: {
-      quotes: [
-        'Gussa tera control mein — count 10, phir bolna.',
-        'Power ko direction do, distraction nahi.'
-      ],
-      actions: ['10-sec breathing karein', '2 minute chup rehkar paani piyo']
-    },
-    lost: {
-      quotes: [
-        'Raasta milta hai chalne se — ek chhota step abhi lo.',
-        'Confusion normal hai, clarity action se aati hai.'
-      ],
-      actions: ['1 chhota task complete karo', '1 dost ko call karo']
+    calm: {
+      quotes: ['Saansein dheere — har pal mein shanti milti hai.', 'Aaj ka din dheere aur meethi pace mein chalne do.'],
+      actions: ['4-7-8 breathing 3 rounds', 'Slow walk 10 minutes']
     },
     hopeful: {
-      quotes: [
-        'Umeed ki roshni se andhera hamesha halka padta hai.',
-        'Kal behtar hoga — aaj se shuru karo.'
-      ],
-      actions: ['1 minute visualization', 'Kal ke 3 goals likho']
+      quotes: ['Kal behtar hoga — aaj se shuru karo.', 'Chhoti jeet bhi jeet hi hoti hai.'],
+      actions: ['1-minute visualization', '3 goals likho']
+    },
+    stressed: {
+      quotes: ['Pressure ko pace mein badlo, jaldi mein nahi.', 'Ek break lo — clarity wapas aayegi.'],
+      actions: ['5 deep breaths', '1 easy task finish']
+    },
+    angry: {
+      quotes: ['Gussa control mein — power ko direction do.', 'Count 10, phir bolo.'],
+      actions: ['10-sec pause + paani', 'Write the trigger']
+    },
+    lost: {
+      quotes: ['Raasta chalne se milta hai — ek step abhi.', 'Confusion action se clear hoti hai.'],
+      actions: ['Call a friend', 'Do one micro task']
     }
   }), []);
-
   const [mood, setMood] = useState('hopeful');
   const [quoteIndex, setQuoteIndex] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setQuoteIndex((i) => (i + 1) % moodData[mood].quotes.length), 3600000);
+    const timer = setInterval(() => setQuoteIndex((i) => (i + 1) % moodData[mood].quotes.length), 10000);
     return () => clearInterval(timer);
   }, [mood, moodData]);
 
@@ -106,34 +110,74 @@ export default function SwipeDeck() {
                  Object.values(routine).filter(Boolean).length;
     return Math.round((done / total) * 100);
   }, [meals, routine]);
+  // Track daily water history
+  const [waterHist, setWaterHist] = useLocalStorage('hist_water', {}); // {date: value}
+  useEffect(() => {
+    const k = todayKey();
+    setWaterHist({ ...waterHist, [k]: water });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [water]);
 
-  // PHASE 1
-  const [phaseActive, setPhaseActive] = useLocalStorage('phase1Active', false);
+  // PHASES
+  const [phase1Active, setPhase1Active] = useLocalStorage('phase1Active', false);
   const [p1, setP1] = useLocalStorage('phase1Tasks', {
     noDrink: false,
     sleep7: false,
     relaxMusic: false,
     journal: false,
   });
+  const [p1Hist, setP1Hist] = useLocalStorage('hist_phase1', []); // array of dates
   const p1Progress = useMemo(() => Math.round((Object.values(p1).filter(Boolean).length / 4) * 100), [p1]);
-  const markP1Complete = () => {
-    try {
-      // Simple clap sound via WebAudio API
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'square';
-      o.frequency.value = 880;
-      o.connect(g);
-      g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
-      o.start();
-      o.stop(ctx.currentTime + 0.16);
-    } catch {}
-    alert('Proud of you Gaurav — tu broken nahi, bas restart kar raha hai.');
+  const markPhase = (num) => {
+    const key = `hist_phase${num}`;
+    const setter = num===1? setP1Hist : num===2? setP2Hist : setP3Hist;
+    const hist = num===1? p1Hist : num===2? p2Hist : p3Hist;
+    const k = todayKey();
+    if (!hist.includes(k)) setter([k, ...hist]);
   };
+
+  const [phase2Active, setPhase2Active] = useLocalStorage('phase2Active', false);
+  const [p2, setP2] = useLocalStorage('phase2Tasks', {
+    strength: false,
+    cardio: false,
+    focusBlock: false,
+    connect: false,
+  });
+  const [p2Hist, setP2Hist] = useLocalStorage('hist_phase2', []);
+  const p2Progress = useMemo(() => Math.round((Object.values(p2).filter(Boolean).length / 4) * 100), [p2]);
+
+  const [phase3Active, setPhase3Active] = useLocalStorage('phase3Active', false);
+  const [p3, setP3] = useLocalStorage('phase3Tasks', {
+    habitDeep: false,
+    learn30: false,
+    hardThing: false,
+    helpSomeone: false,
+  });
+  const [p3Hist, setP3Hist] = useLocalStorage('hist_phase3', []);
+  const p3Progress = useMemo(() => Math.round((Object.values(p3).filter(Boolean).length / 4) * 100), [p3]);
+
+  // HABITS
+  const [habits, setHabits] = useLocalStorage('habits', [
+    { id: 1, name: 'Read 10 pages', done: false },
+    { id: 2, name: 'Stretch 5 min', done: false },
+  ]);
+  const [newHabit, setNewHabit] = useState('');
+  const [habitHist, setHabitHist] = useLocalStorage('hist_habits', {}); // {date: count}
+  const toggleHabit = (id) => {
+    setHabits(habits.map(h => h.id===id? { ...h, done: !h.done } : h));
+  };
+  const addHabit = () => {
+    const name = newHabit.trim(); if (!name) return; 
+    const id = Date.now();
+    setHabits([...habits, { id, name, done: false }]);
+    setNewHabit('');
+  };
+  useEffect(() => {
+    const k = todayKey();
+    const count = habits.filter(h=>h.done).length;
+    setHabitHist({ ...habitHist, [k]: count });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [habits]);
 
   // JOURNAL
   const [entry, setEntry] = useState('');
@@ -144,77 +188,113 @@ export default function SwipeDeck() {
     const item = { id: Date.now(), text: entry.trim(), rating: score, at: new Date().toISOString() };
     setNotes([item, ...notes]);
     setEntry('');
+    setPoints(points + 5);
   };
 
-  const startVoice = async () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert('Voice input not supported in this browser.'); return; }
-    const rec = new SR();
-    rec.lang = 'en-IN';
-    rec.interimResults = false;
-    rec.onresult = (e) => {
-      const text = Array.from(e.results).map(r => r[0].transcript).join(' ');
-      setEntry((prev) => (prev ? prev + ' ' : '') + text);
+  // Calm Zone
+  const [breathPhase, setBreathPhase] = useState('Inhale 4');
+  const [breathCount, setBreathCount] = useState(0);
+  useEffect(() => {
+    let i = 0;
+    const seq = [ ['Inhale', 4], ['Hold', 7], ['Exhale', 8] ];
+    const tick = () => {
+      const [label, secs] = seq[i % seq.length];
+      setBreathPhase(`${label} ${secs}`);
+      setBreathCount((c)=>c+1);
+      timer = setTimeout(() => { i++; tick(); }, secs * 1000);
     };
-    rec.start();
+    let timer = setTimeout(tick, 500);
+    return () => clearTimeout(timer);
+  }, []);
+  const soundUrl = 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_5f3d5e2a3c.mp3?filename=brown-noise-22360.mp3';
+
+  // Anger Management
+  const [angerSecs, setAngerSecs] = useState(60);
+  useEffect(() => {
+    if (angerSecs <= 0) return;
+    const t = setTimeout(() => setAngerSecs(angerSecs - 1), 1000);
+    return () => clearTimeout(t);
+  }, [angerSecs]);
+  const [reframe, setReframe] = useState('');
+
+  // Analytics & Rewards
+  const [points, setPoints] = useLocalStorage('points', 0);
+  useEffect(() => {
+    // award when completing phase progress to 100
+    if (p1Progress === 100) setPoints((p)=>p+10);
+    if (p2Progress === 100) setPoints((p)=>p+10);
+    if (p3Progress === 100) setPoints((p)=>p+10);
+  }, [p1Progress, p2Progress, p3Progress]);
+  const badges = useMemo(() => [
+    { id: 'start', label: 'Day One', need: 5 },
+    { id: 'streak', label: '3-Day Streak', need: 30 },
+    { id: 'unstoppable', label: 'Unstoppable', need: 100 },
+  ].filter(b => points >= b.need), [points]);
+
+  // Notifications
+  const requestNotify = async () => {
+    if (!('Notification' in window)) { alert('Notifications not supported'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      new Notification('Gaurav 2.0', { body: 'Breathing break? 4-7-8 x3 rounds 🌿' });
+    }
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
+      {/* Side arrows */}
+      <button onClick={() => goBy(-1)} className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700">◀</button>
+      <button onClick={() => goBy(1)} className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow hover:bg-emerald-700">▶</button>
+
       <div
         ref={containerRef}
         className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
         style={{ scrollSnapType: 'x mandatory' }}
       >
         {/* 1. Motivation & Mood */}
-        <Section title="Motivation & Mood">
+        <Section title="Motivation & Mood" subtitle="Pick mood to see tailored quote and tiny action">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <div className="text-gray-700 text-sm mb-2">Tap to change quote</div>
+              <div className="text-slate-600 text-sm mb-2">Tap to change quote</div>
               <button
                 onClick={() => setQuoteIndex((i) => (i + 1) % moodData[mood].quotes.length)}
-                className="w-full text-left p-4 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 hover:shadow"
+                className="w-full text-left p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 hover:shadow"
               >
-                <p className="text-lg font-semibold text-gray-900">{moodData[mood].quotes[quoteIndex]}</p>
-                <p className="mt-2 text-sm text-orange-700">Action: {moodData[mood].actions[quoteIndex % moodData[mood].actions.length]}</p>
+                <p className="text-lg font-semibold text-slate-900">{moodData[mood].quotes[quoteIndex]}</p>
+                <p className="mt-2 text-sm text-emerald-700">Action: {moodData[mood].actions[quoteIndex % moodData[mood].actions.length]}</p>
               </button>
             </div>
             <div>
-              <div className="text-sm text-gray-600 mb-2">How are you feeling?</div>
+              <div className="text-sm text-slate-600 mb-2">How are you feeling?</div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {moodOptions.map((m) => (
                   <button
                     key={m.key}
                     onClick={() => { setMood(m.key); setQuoteIndex(0); }}
-                    className={`rounded-lg px-3 py-2 border text-sm ${mood === m.key ? 'bg-orange-500 text-white border-orange-500' : 'bg-white border-gray-200 hover:border-orange-300'}`}
+                    className={`rounded-lg px-3 py-2 border text-sm ${mood === m.key ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-slate-200 hover:border-emerald-300'}`}
                   >
                     {m.label}
                   </button>
                 ))}
-              </div>
-              <div className="mt-4">
-                <button onClick={goNext} className="inline-flex items-center gap-2 rounded-full bg-orange-600 text-white px-4 py-2 text-sm font-medium shadow hover:bg-orange-700">
-                  Next
-                </button>
               </div>
             </div>
           </div>
         </Section>
 
         {/* 2. Health & Daily Routine */}
-        <Section title="Health & Daily Routine">
+        <Section title="Health & Daily Routine" subtitle="Water, meals, routine, and quick progress view">
           <div className="space-y-6">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="font-medium">Water Tracker</p>
-                <span className="text-sm text-gray-600">{water}/8 glasses</span>
+                <span className="text-sm text-slate-600">{water}/8 glasses</span>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setWater(Math.max(0, water - 1))} className="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200">-</button>
-                <button onClick={() => setWater(Math.min(8, water + 1))} className="px-3 py-1.5 rounded bg-orange-600 text-white hover:bg-orange-700">+</button>
+                <button onClick={() => setWater(Math.max(0, water - 1))} className="px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200">-</button>
+                <button onClick={() => setWater(Math.min(8, water + 1))} className="px-3 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">+</button>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full mt-3 overflow-hidden">
-                <div className="h-full bg-orange-500 transition-all" style={{ width: `${(water/8)*100}%` }} />
+              <div className="h-2 bg-slate-100 rounded-full mt-3 overflow-hidden">
+                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(water/8)*100}%` }} />
               </div>
             </div>
 
@@ -240,7 +320,7 @@ export default function SwipeDeck() {
                   ['noDrink','No Drink Today'],
                   ['message','Message an important person'],
                 ].map(([k,label]) => (
-                  <label key={k} className="flex items-center gap-2 p-2 rounded border border-gray-200 hover:border-orange-300">
+                  <label key={k} className="flex items-center gap-2 p-2 rounded border border-slate-200 hover:border-emerald-300">
                     <input type="checkbox" checked={!!routine[k]} onChange={(e)=> setRoutine({ ...routine, [k]: e.target.checked })} />
                     {label}
                   </label>
@@ -248,46 +328,40 @@ export default function SwipeDeck() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">Completion: <span className="font-semibold text-gray-900">{healthCompletion}%</span></div>
-              <button onClick={()=> setShowHealthProgress(true)} className="rounded-full bg-gray-900 text-white px-4 py-2 text-sm">View Progress</button>
-            </div>
-
             {showHealthProgress && (
               <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4" onClick={()=> setShowHealthProgress(false)}>
                 <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e)=> e.stopPropagation()}>
                   <h3 className="text-lg font-semibold mb-2">Health Progress</h3>
-                  <p className="text-sm text-gray-600 mb-4">Great going! Keep the streak alive.</p>
-                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <p className="text-sm text-slate-600 mb-4">Great going! Keep the streak alive.</p>
+                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-500" style={{ width: `${healthCompletion}%` }} />
                   </div>
                   <div className="mt-3 text-sm">Estimated streak: <span className="font-medium">{Math.round(healthCompletion/20)} days</span></div>
                   <div className="mt-4 text-right">
-                    <button onClick={()=> setShowHealthProgress(false)} className="rounded bg-gray-900 text-white px-4 py-2 text-sm">Close</button>
+                    <button onClick={()=> setShowHealthProgress(false)} className="rounded bg-slate-900 text-white px-4 py-2 text-sm">Close</button>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="mt-2">
-              <button onClick={goNext} className="inline-flex items-center gap-2 rounded-full bg-orange-600 text-white px-4 py-2 text-sm font-medium shadow hover:bg-orange-700">
-                Next
-              </button>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-slate-600">Completion: <span className="font-semibold text-slate-900">{healthCompletion}%</span></div>
+              <button onClick={()=> setShowHealthProgress(true)} className="rounded-full bg-slate-900 text-white px-4 py-2 text-sm">View Progress</button>
             </div>
           </div>
         </Section>
 
         {/* 3. Phase 1: Control & Reset */}
-        <Section title="Phase 1: Control & Reset (21 Days)">
+        <Section title="Phase 1: Control & Reset (21 Days)" subtitle="Alcohol control, sleep, calm, journaling">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setPhaseActive(!phaseActive)}
-                className={`px-4 py-2 rounded-full text-sm font-medium ${phaseActive ? 'bg-emerald-600 text-white' : 'bg-gray-900 text-white'}`}
+                onClick={() => setPhase1Active(!phase1Active)}
+                className={`px-4 py-2 rounded-full text-sm font-medium ${phase1Active ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'}`}
               >
-                {phaseActive ? 'Phase 1 Active' : 'Start Phase 1'}
+                {phase1Active ? 'Phase 1 Active' : 'Start Phase 1'}
               </button>
-              <div className="text-sm text-gray-600">Focus: regain control over alcohol, sleep, calm.</div>
+              <div className="text-sm text-slate-600">Focus: regain control over alcohol, sleep, calm.</div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-2 text-sm">
@@ -297,40 +371,154 @@ export default function SwipeDeck() {
                 ['relaxMusic','10-min Relax Music'],
                 ['journal','Journal Entry Done'],
               ].map(([k,label]) => (
-                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p1[k] ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200'}`}>
-                  <input type="checkbox" disabled={!phaseActive} checked={!!p1[k]} onChange={(e)=> setP1({ ...p1, [k]: e.target.checked })} />
+                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p1[k] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                  <input type="checkbox" disabled={!phase1Active} checked={!!p1[k]} onChange={(e)=> setP1({ ...p1, [k]: e.target.checked })} />
                   {label}
                 </label>
               ))}
             </div>
 
             <div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 transition-all" style={{ width: `${p1Progress}%` }} />
               </div>
-              <div className="mt-1 text-sm text-gray-600">Progress: {p1Progress}%</div>
+              <div className="mt-1 text-sm text-slate-600">Progress: {p1Progress}%</div>
             </div>
 
             <div className="flex items-center gap-3">
-              <button onClick={markP1Complete} className="rounded bg-orange-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
-              <button className="rounded bg-gray-900 text-white px-4 py-2 text-sm" onClick={goNext}>Next</button>
+              <button onClick={() => { markPhase(1); }} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
             </div>
 
-            <p className="text-xs text-gray-500">“Proud of you Gaurav — tu broken nahi, bas restart kar raha hai.”</p>
+            <div className="text-xs text-slate-500">Streak: {calcStreak(p1Hist)} days</div>
           </div>
         </Section>
 
-        {/* 4. Reflection & Journal */}
-        <Section title="Reflection & Journal">
+        {/* 4. Phase 2: Build Power */}
+        <Section title="Phase 2: Build Power (21 Days)" subtitle="Strength, cardio, focus blocks, connection">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setPhase2Active(!phase2Active)} className={`px-4 py-2 rounded-full text-sm font-medium ${phase2Active ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'}`}>
+                {phase2Active ? 'Phase 2 Active' : 'Start Phase 2'}
+              </button>
+              <div className="text-sm text-slate-600">Build physical and mental strength.</div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-2 text-sm">
+              {[
+                ['strength','Strength session'],
+                ['cardio','20-min Cardio'],
+                ['focusBlock','45-min Focus Block'],
+                ['connect','Call/Meet someone important'],
+              ].map(([k,label]) => (
+                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p2[k] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                  <input type="checkbox" disabled={!phase2Active} checked={!!p2[k]} onChange={(e)=> setP2({ ...p2, [k]: e.target.checked })} />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div>
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${p2Progress}%` }} />
+              </div>
+              <div className="mt-1 text-sm text-slate-600">Progress: {p2Progress}%</div>
+            </div>
+            <button onClick={() => { markPhase(2); }} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
+            <div className="text-xs text-slate-500">Streak: {calcStreak(p2Hist)} days</div>
+          </div>
+        </Section>
+
+        {/* 5. Phase 3: Thrive */}
+        <Section title="Phase 3: Thrive (Forever)" subtitle="Deep habits, learning, doing hard things, kindness">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setPhase3Active(!phase3Active)} className={`px-4 py-2 rounded-full text-sm font-medium ${phase3Active ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-white'}`}>
+                {phase3Active ? 'Phase 3 Active' : 'Start Phase 3'}
+              </button>
+              <div className="text-sm text-slate-600">Live your best systems daily.</div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-2 text-sm">
+              {[
+                ['habitDeep','Deep habit practice'],
+                ['learn30','Learn 30 minutes'],
+                ['hardThing','Do one hard thing'],
+                ['helpSomeone','Help someone'],
+              ].map(([k,label]) => (
+                <label key={k} className={`flex items-center gap-2 p-2 rounded border ${p3[k] ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                  <input type="checkbox" disabled={!phase3Active} checked={!!p3[k]} onChange={(e)=> setP3({ ...p3, [k]: e.target.checked })} />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div>
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${p3Progress}%` }} />
+              </div>
+              <div className="mt-1 text-sm text-slate-600">Progress: {p3Progress}%</div>
+            </div>
+            <button onClick={() => { markPhase(3); }} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Mark Day Complete</button>
+            <div className="text-xs text-slate-500">Streak: {calcStreak(p3Hist)} days</div>
+          </div>
+        </Section>
+
+        {/* 6. Habits & Custom */}
+        <Section title="Habits & Custom" subtitle="Track daily habits and add your own">
+          <div className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-2">
+              {habits.map(h => (
+                <label key={h.id} className={`flex items-center gap-2 p-2 rounded border ${h.done ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'}`}>
+                  <input type="checkbox" checked={h.done} onChange={() => toggleHabit(h.id)} />
+                  <span className="text-sm">{h.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <input value={newHabit} onChange={(e)=> setNewHabit(e.target.value)} placeholder="Add a new habit" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              <button onClick={addHabit} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Add</button>
+            </div>
+            <div className="text-xs text-slate-500">Today done: {habits.filter(h=>h.done).length} • Streak approx: {Math.round((habitHist[todayKey()]||0)/Math.max(1,habits.length)*3)} days</div>
+          </div>
+        </Section>
+
+        {/* 7. Calm Zone */}
+        <Section title="Calm Zone" subtitle="4-7-8 breathing with brown noise option">
+          <div className="grid sm:grid-cols-2 gap-4 items-center">
+            <div className="flex flex-col items-center">
+              <div className="h-40 w-40 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center text-emerald-700 text-lg font-semibold animate-pulse" aria-live="polite">{breathPhase}</div>
+              <div className="mt-2 text-xs text-slate-500">Cycles: {Math.floor(breathCount/3)}</div>
+            </div>
+            <div className="space-y-3">
+              <audio controls src={soundUrl} className="w-full" />
+              <p className="text-sm text-slate-600">Tip: Close eyes, sit upright, tongue behind teeth. Inhale 4 — Hold 7 — Exhale 8.</p>
+            </div>
+          </div>
+        </Section>
+
+        {/* 8. Anger Management */}
+        <Section title="Anger Management" subtitle="Pause, breathe, reframe, act with clarity">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setAngerSecs(60)} className="rounded bg-slate-900 text-white px-4 py-2 text-sm">Start 60s Timer</button>
+              <div className="text-sm text-slate-700">Time left: {angerSecs}s</div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3 text-sm">
+              <div className="p-3 rounded-lg border border-slate-200">
+                Box Breathing: 4-in, 4-hold, 4-out, 4-hold x4.
+              </div>
+              <div className="p-3 rounded-lg border border-slate-200">
+                Write Trigger → Reframe: What else could this mean?
+              </div>
+            </div>
+            <textarea value={reframe} onChange={(e)=> setReframe(e.target.value)} rows={3} placeholder="Write your trigger and a calmer reframe..." className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          </div>
+        </Section>
+
+        {/* 9. Reflection & Journal */}
+        <Section title="Reflection & Journal" subtitle="Rate your day and jot your thoughts">
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">How was your day? (1–10)</label>
                 <input type="range" min="1" max="10" value={score} onChange={(e)=> setScore(parseInt(e.target.value))} className="w-full" />
-                <div className="text-sm text-gray-600">Rating: {score}</div>
-              </div>
-              <div className="flex items-end">
-                <button onClick={startVoice} className="rounded bg-gray-900 text-white px-4 py-2 text-sm w-full">🎙️ Voice</button>
+                <div className="text-sm text-slate-600">Rating: {score}</div>
               </div>
             </div>
 
@@ -339,32 +527,117 @@ export default function SwipeDeck() {
               onChange={(e)=> setEntry(e.target.value)}
               rows={4}
               placeholder="What did I learn today? Aaj ka sabse important moment kya tha?"
-              className="w-full rounded-xl border border-gray-200 p-3 focus:outline-none focus:ring-2 focus:ring-orange-300"
+              className="w-full rounded-xl border border-slate-200 p-3 focus:outline-none focus:ring-2 focus:ring-emerald-300"
             />
             <div className="flex items-center justify-between">
-              <button onClick={saveEntry} className="rounded bg-orange-600 text-white px-4 py-2 text-sm">Save Reflection</button>
-              <button onClick={goNext} className="rounded bg-gray-900 text-white px-4 py-2 text-sm">Next</button>
+              <button onClick={saveEntry} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Save Reflection</button>
+              <div className="text-sm text-slate-600">Points: {points}</div>
             </div>
 
             <div>
               <h4 className="text-sm font-semibold mb-2">Old Reflections</h4>
               <div className="space-y-2 max-h-48 overflow-auto pr-1">
                 {notes.length === 0 ? (
-                  <div className="text-sm text-gray-500">No reflections yet.</div>
+                  <div className="text-sm text-slate-500">No reflections yet.</div>
                 ) : notes.map((n) => (
-                  <div key={n.id} className="p-3 rounded-lg border border-gray-200">
-                    <div className="text-xs text-gray-500">{new Date(n.at).toLocaleString()}</div>
+                  <div key={n.id} className="p-3 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500">{new Date(n.at).toLocaleString()}</div>
                     <div className="text-sm mt-1">{n.text}</div>
-                    <div className="text-xs text-gray-600 mt-1">Day score: {n.rating}/10</div>
+                    <div className="text-xs text-slate-600 mt-1">Day score: {n.rating}/10</div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
         </Section>
+
+        {/* 10. Analytics */}
+        <Section title="Analytics" subtitle="Simple charts for water, habits, and phases">
+          <div className="grid sm:grid-cols-2 gap-6">
+            <div>
+              <h5 className="text-sm font-semibold mb-2">Water (last 7 days)</h5>
+              <BarChart data={last7(waterHist)} max={8} color="bg-emerald-500" />
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold mb-2">Habits done (last 7 days)</h5>
+              <BarChart data={last7(habitHist)} max={habits.length} color="bg-teal-500" />
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold mb-2">Phase check-ins (P1/P2/P3)</h5>
+              <div className="flex gap-4 text-sm">
+                <Badge label="P1" value={p1Hist.length} />
+                <Badge label="P2" value={p2Hist.length} />
+                <Badge label="P3" value={p3Hist.length} />
+              </div>
+            </div>
+            <div>
+              <h5 className="text-sm font-semibold mb-2">Badges Earned</h5>
+              <div className="flex flex-wrap gap-2">
+                {badges.length === 0 ? <span className="text-sm text-slate-500">No badges yet.</span> : badges.map(b => (
+                  <span key={b.id} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">🏅 {b.label}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        {/* 11. Rewards */}
+        <Section title="Rewards" subtitle="Earn points for consistency and unlock badges">
+          <div className="space-y-3">
+            <div className="text-3xl font-bold text-emerald-600">{points}</div>
+            <div className="text-sm text-slate-600">You gain +10 for full phase day, +5 per reflection.</div>
+            <div className="flex flex-wrap gap-2">
+              {[10,30,60,100].map(n => (
+                <div key={n} className={`px-3 py-2 rounded-lg border ${points>=n? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>Milestone {n}</div>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* 12. Notifications */}
+        <Section title="Notifications" subtitle="Enable gentle reminders (browser-based)">
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">Turn on notifications to get a soft nudge for breathing or water.</p>
+            <button onClick={requestNotify} className="rounded bg-emerald-600 text-white px-4 py-2 text-sm">Enable & Send Test</button>
+            <div className="text-xs text-slate-500">Note: Works if your browser allows notifications.</div>
+          </div>
+        </Section>
       </div>
 
-      <div className="text-center text-xs text-gray-500 py-4">“Tu unstoppable hai — har din ek naya chance.”</div>
+      <div className="text-center text-xs text-slate-500 py-4">“Tu unstoppable hai — har din ek naya chance.”</div>
+    </div>
+  );
+}
+
+function last7(obj) {
+  // obj: {date: value}
+  const out = [];
+  for (let i=6;i>=0;i--) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const k = d.toISOString().slice(0,10);
+    out.push({ label: k.slice(5), value: obj[k] || 0 });
+  }
+  return out;
+}
+
+function BarChart({ data, max, color }) {
+  return (
+    <div className="w-full h-32 flex items-end gap-2">
+      {data.map((d, idx) => (
+        <div key={idx} className="flex-1 flex flex-col items-center">
+          <div className={`w-full rounded-t ${color}`} style={{ height: `${max? (d.value/max)*100 : 0}%`, minHeight: '4px' }} />
+          <div className="mt-1 text-[10px] text-slate-500">{d.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Badge({ label, value }) {
+  return (
+    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-sm">
+      <span className="text-xs font-medium text-slate-700">{label}</span>
+      <span className="text-sm font-semibold text-emerald-700">{value}</span>
     </div>
   );
 }
