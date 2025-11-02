@@ -1,66 +1,88 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-function MusicButton() {
+// Reliable, CORS-friendly default track. You can paste a custom URL in the input.
+const DEFAULT_TRACK = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+
+export default function TopBar() {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [error, setError] = useState('');
-
-  const ensureReady = () => {
-    const a = audioRef.current;
-    if (!a) return;
+  const [errorMsg, setErrorMsg] = useState('');
+  const [trackUrl, setTrackUrl] = useState(() => {
     try {
-      a.muted = false; // ensure not muted on iOS
-      a.playsInline = true;
-      a.crossOrigin = 'anonymous';
-      if (a.readyState < 2) a.load();
+      return localStorage.getItem('musicTrackUrl') || DEFAULT_TRACK;
+    } catch {
+      return DEFAULT_TRACK;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('musicTrackUrl', trackUrl);
     } catch {}
+  }, [trackUrl]);
+
+  const ensureReady = async () => {
+    if (!audioRef.current) return;
+    try {
+      // Reset and load to ensure latest URL is used
+      audioRef.current.pause();
+      await audioRef.current.load?.();
+      await audioRef.current.play();
+      setIsPlaying(true);
+      setErrorMsg('');
+    } catch (err) {
+      setIsPlaying(false);
+      setErrorMsg('Tap the play button again to start the music (autoplay was blocked).');
+    }
   };
 
   const togglePlay = async () => {
     if (!audioRef.current) return;
-    ensureReady();
-    try {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        await audioRef.current.play();
-        setIsPlaying(true);
-        setError('');
-      }
-    } catch (e) {
-      // Some browsers reject first attempt; a second tap after load usually works
-      setError('Tap once more to start playback.');
-      try { await audioRef.current.play(); setIsPlaying(true); setError(''); } catch {}
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      await ensureReady();
     }
   };
 
-  // Calm, royalty-free track (reliable CORS)
-  const TRACK_URL = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-
   return (
-    <div className="flex items-center gap-3">
-      <audio ref={audioRef} src={TRACK_URL} preload="auto" crossOrigin="anonymous" />
-      <button
-        onClick={togglePlay}
-        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors border ${isPlaying ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'}`}
-        aria-label={isPlaying ? 'Pause music' : 'Play music'}
-      >
-        <span role="img" aria-label="headphones">🎧</span>
-        <span className="text-sm font-medium">{isPlaying ? 'Pause' : 'Play'}</span>
-      </button>
-      {error && <span className="text-xs text-slate-500">{error}</span>}
-    </div>
-  );
-}
+    <header className="sticky top-0 z-30 backdrop-blur bg-black/30 border-b border-white/10">
+      <div className="mx-auto max-w-6xl px-4 h-14 flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600/80">🎧</span>
+          <span className="text-sm text-indigo-200/90 hidden sm:block">Focus Music</span>
+        </div>
 
-export default function TopBar() {
-  return (
-    <header className="w-full sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-white/60 bg-white/70 border-b border-white/30">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="text-lg sm:text-xl font-semibold tracking-tight text-indigo-700">Gaurav Version 2.0</div>
-        <MusicButton />
+        <button
+          onClick={togglePlay}
+          className={`ml-2 px-3 py-1.5 rounded-md text-sm border transition-colors ${
+            isPlaying ? 'bg-indigo-600 border-indigo-500' : 'bg-white/10 border-white/15 hover:bg-white/15'
+          }`}
+        >
+          {isPlaying ? 'Pause' : 'Play'}
+        </button>
+
+        <div className="ml-3 flex-1 min-w-0">
+          <input
+            value={trackUrl}
+            onChange={(e) => setTrackUrl(e.target.value)}
+            placeholder="Paste a track URL (e.g., Unstoppable by Sia stream)"
+            className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/60"
+          />
+        </div>
+
+        <audio
+          ref={audioRef}
+          src={trackUrl}
+          preload="none"
+          controls={false}
+          crossOrigin="anonymous"
+        />
       </div>
+      {errorMsg && (
+        <div className="mx-auto max-w-6xl px-4 pb-2 text-xs text-amber-300">{errorMsg}</div>
+      )}
     </header>
   );
 }
