@@ -1,28 +1,23 @@
-import { useState } from 'react'
+import React from 'react';
+import TopBar from './components/TopBar';
+import HeroSpline from './components/HeroSpline';
+import SwipeDeck from './components/SwipeDeck';
 
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-lg">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">
-          Vibe Coding Platform
-        </h1>
-        <p className="text-gray-600 mb-6">
-          Your AI-powered development environment
-        </p>
-        <div className="text-center">
-          <button
-            onClick={() => setCount(count + 1)}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded"
-          >
-            Count is {count}
-          </button>
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-50 via-white to-white text-gray-900">
+      <TopBar />
+      <HeroSpline />
+      <main className="max-w-[100vw] overflow-hidden">
+        <div className="w-full flex justify-center">
+          <div className="w-full">
+            <SwipeDeck />
+          </div>
         </div>
-      </div>
+      </main>
+      <footer className="py-8 text-center text-sm text-gray-500">
+        Tu ruk gaya tha Gaurav, khatam nahi hua. Ab comeback ka time hai.
+      </footer>
     </div>
-  )
+  );
 }
-
-export default App
